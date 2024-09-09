@@ -1,0 +1,54 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: Python application
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    - name: DB setup
+      run: |
+        export FLASK_APP=core/server.py
+        flask db upgrade -d core/migrations/
+
+    - name: Test with pytest
+      run: |
+        set -o pipefail
+        pytest -vvv -s tests/ --cov --cov-fail-under=80 --junit-xml=test_reports/report.xml --cov-report=term-missing | tee pytest_coverage.txt
+
+    - name: Log coverage results if master branch
+      uses: MishaKav/pytest-coverage-comment@main
+      id: coverage_comment
+      if: ${{ always() && inputs.branch_ref == 'refs/heads/master' }}
+      with:
+        pytest-coverage-path: ./pytest_coverage.txt
+        junitxml-path: ./test_reports/report.xml 
+    
+    - name: Upload artifacts 
+      uses: actions/upload-artifact@v4 
+      with:
+        name: coverage-reports
+        path: |
+          ./pytest_coverage.txt
+          ./test_reports/report.xml
